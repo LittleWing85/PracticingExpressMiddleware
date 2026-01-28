@@ -1,14 +1,10 @@
 const express = require("express");
 const app = express();
-
 const morgan = require("morgan");
-const { createWriteStream } = require("fs");
+const bodyParser = require("body-parser");
+const errorhandler = require("errorhandler");
 
 app.use(express.static("public"));
-
-app.use(
-    morgan("tiny", { stream: createWriteStream("./app.log", { flags: "a" }) }),
-);
 
 const jellybeanBag = {
     mystery: {
@@ -28,19 +24,13 @@ const jellybeanBag = {
     },
 };
 
-const bodyParser = (req, res, next) => {
-    let queryData = "";
-    req.on("data", (data) => {
-        data = data.toString();
-        queryData += data;
-    });
-    req.on("end", () => {
-        if (queryData) {
-            req.body = JSON.parse(queryData);
-        }
-        next();
-    });
-};
+// Body-parsing Middleware
+app.use(bodyParser.json());
+
+// Logging Middleware
+if (!process.env.IS_TEST_ENV) {
+    app.use(morgan("dev"));
+}
 
 app.use("/beans/:beanName", (req, res, next) => {
     const beanName = req.params.beanName;
@@ -52,11 +42,11 @@ app.use("/beans/:beanName", (req, res, next) => {
     next();
 });
 
-app.get("/beans", (req, res, next) => {
+app.get("/beans", (req, res) => {
     res.send(jellybeanBag);
 });
 
-app.post("/beans", bodyParser, (req, res, next) => {
+app.post("/beans", (req, res) => {
     const body = req.body;
     const beanName = body.name;
     if (jellybeanBag[beanName] || jellybeanBag[beanName] === 0) {
@@ -69,17 +59,17 @@ app.post("/beans", bodyParser, (req, res, next) => {
     res.send(jellybeanBag[beanName]);
 });
 
-app.get("/beans/:beanName", (req, res, next) => {
+app.get("/beans/:beanName", (req, res) => {
     res.send(req.bean);
 });
 
-app.post("/beans/:beanName/add", bodyParser, (req, res, next) => {
+app.post("/beans/:beanName/add", (req, res) => {
     const numberOfBeans = Number(req.body.number) || 0;
     req.bean.number += numberOfBeans;
     res.send(req.bean);
 });
 
-app.post("/beans/:beanName/remove", bodyParser, (req, res, next) => {
+app.post("/beans/:beanName/remove", (req, res) => {
     const numberOfBeans = Number(req.body.number) || 0;
     if (req.bean.number < numberOfBeans) {
         return res.status(400).send("Not enough beans in the jar to remove!");
@@ -88,13 +78,13 @@ app.post("/beans/:beanName/remove", bodyParser, (req, res, next) => {
     res.send(req.bean);
 });
 
-app.delete("/beans/:beanName", (req, res, next) => {
+app.delete("/beans/:beanName", (req, res) => {
     const beanName = req.beanName;
     jellybeanBag[beanName] = null;
     res.status(204).send();
 });
 
-app.put("/beans/:beanName/name", bodyParser, (req, res, next) => {
+app.put("/beans/:beanName/name", (req, res) => {
     const beanName = req.beanName;
     const newName = req.body.name;
     jellybeanBag[newName] = req.bean;
@@ -102,7 +92,8 @@ app.put("/beans/:beanName/name", bodyParser, (req, res, next) => {
     res.send(jellybeanBag[newName]);
 });
 
-// export app for use in main.js and for testing
+app.use(errorhandler());
+
 module.exports = {
     app,
 };
